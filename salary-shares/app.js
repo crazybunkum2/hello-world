@@ -89,7 +89,7 @@ let edit=-1;
 $('addHolding').onclick=()=>{edit=-1;$('holdingForm').reset();$('holdingDialog').showModal()};
 $('holdings').onclick=e=>{
  if(e.target.dataset.edit!==undefined){edit=+e.target.dataset.edit;let h=data.holdings[edit];$('ticker').value=h.symbol;$('quantity').value=h.qty;$('basis').value=h.basis;$('holdingDialog').showModal()}
- if(e.target.dataset.remove!==undefined){let i=+e.target.dataset.remove;if(confirm('Remove this holding?')){data.holdings.splice(i,1);save();render()}}
+ if(e.target.dataset.remove!==undefined){let i=+e.target.dataset.remove;if(confirm('Remove this holding?')){data.holdings.splice(i,1);data.holdingsUpdatedAt=Date.now();save();render()}}
 };
 $('cancelHolding').onclick=()=>$('holdingDialog').close();
 $('holdingForm').onsubmit=e=>{
@@ -229,8 +229,6 @@ async function ssSyncNow(){
  ssSyncBusy=true;
  try{
   ssSyncStatus.textContent='Synchronising…';
-  const remote=await ssRequest('GET');
-  if(remote && remote.schema===1)ssApply(remote);
   const merged=await ssRequest('POST',ssPayload());
   ssApply(merged);
   localStorage.setItem('ss-paired-initial-import-v1','1');
