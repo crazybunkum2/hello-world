@@ -133,3 +133,123 @@ $('refresh').onclick=loadPrices;render();loadPrices();
 setInterval(()=>{render();if(!document.hidden)loadPrices()},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadPrices()});
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+
+// SS_SECURE_DESKTOP_SYNC_V1
+// No finance records or access keys are embedded in the public website.
+const SS_SYNC_URL='https://salary-shares-iphone-paul-2026.netlify.app/.netlify/functions/sync';
+const SS_SYNC_STORAGE='ss-personal-omarchy-pairing-v1';
+let ssSyncKey=localStorage.getItem(SS_SYNC_STORAGE)||'';
+let ssSyncBusy=false, ssSyncTimer=null;
+const ssSyncStatus=$('syncStatus');
+if(ssSyncKey){ssSyncStatus.textContent='Paired with Omarchy. Syncing…';}
+function ssSpending(){
+ let changed=false;
+ for(let x of data.spending){
+   if(!x.id){x.id=crypto.randomUUID();changed=true}
+   if(!Number.isFinite(x.updatedAt)){x.updatedAt=x.at||Date.now();changed=true}
+ }
+ if(changed)localStorage.setItem(KEY,JSON.stringify({schema:2,data}));
+ return data.spending.map(x=>({id:x.id,at:x.at,baisa:x.baisa,label:x.label,removed:!!x.removed,updatedAt:x.updatedAt}));
+}
+const ssOriginalSave=save;
+save=function(){
+ ssOriginalSave();
+ if(ssSyncKey && !ssSyncBusy){
+  clearTimeout(ssSyncTimer);
+  ssSyncTimer=setTimeout(()=>ssSyncNow(),1800);
+ }
+};
+const ssOriginalSaveSettings=$('saveSettings').onclick;
+$('saveSettings').onclick=function(){
+ data.settingsUpdatedAt=Date.now();
+ ssOriginalSaveSettings();
+};
+$('holdingForm').addEventListener('submit',()=>{data.holdingsUpdatedAt=Date.now()}, {capture:true});
+function ssPayload(){
+ return {
+  schema:1,
+  settings:data.baisa===null?null:{
+   anchor:Number(data.anchor)||0,
+   openingBaisa:Number(data.baisa),
+   salaryBaisa:Number(data.salaryBaisa),
+   rentBaisa:Number(data.rentBaisa),
+   updatedAt:Number(data.settingsUpdatedAt)||Number(data.anchor)||1
+  },
+  holdings:data.holdings.map(h=>({symbol:h.symbol,qty:Number(h.qty),basis:Number(h.basis)})),
+  holdingsUpdatedAt:Number(data.holdingsUpdatedAt)||1,
+  spending:ssSpending()
+ };
+}
+function ssApply(remote){
+ if(!remote || remote.schema!==1)throw Error('Unexpected synchronisation data');
+ if(remote.settings && Number.isSafeInteger(remote.settings.openingBaisa)){
+  let s=remote.settings, old=Number(data.settingsUpdatedAt)||Number(data.anchor)||0;
+  if(s.updatedAt>=old){
+   data.anchor=s.anchor;
+   data.baisa=s.openingBaisa;
+   data.salaryBaisa=s.salaryBaisa;
+   data.rentBaisa=s.rentBaisa;
+   data.settingsUpdatedAt=s.updatedAt;
+  }
+ }
+ if(Array.isArray(remote.holdings) &&
+    Number(remote.holdingsUpdatedAt)>=Number(data.holdingsUpdatedAt||0)){
+   data.holdings=remote.holdings.filter(h=>typeof h.symbol==='string'&&Number.isFinite(h.qty)&&Number.isFinite(h.basis));
+   data.holdingsUpdatedAt=Number(remote.holdingsUpdatedAt)||1;
+ }
+ if(Array.isArray(remote.spending)){
+  let list=new Map();
+  for(let x of [...ssSpending(),...remote.spending]){
+   if(!x||typeof x.id!=='string'||!Number.isFinite(x.baisa)||!Number.isFinite(x.at))continue;
+   let old=list.get(x.id);
+   if(!old || Number(x.updatedAt)>=Number(old.updatedAt))
+    list.set(x.id,{id:x.id,at:x.at,baisa:x.baisa,label:x.label||'Payment',removed:!!x.removed,updatedAt:x.updatedAt||x.at});
+  }
+  data.spending=[...list.values()].filter(x=>!x.removed);
+ }
+ ssOriginalSave();
+ render();
+}
+async function ssRequest(method,body){
+ const r=await fetch(SS_SYNC_URL,{
+  method,mode:'cors',cache:'no-store',
+  headers:{'Authorization':'Bearer '+ssSyncKey,'Content-Type':'application/json'},
+  ...(body?{body:JSON.stringify(body)}:{})
+ });
+ if(!r.ok)throw Error('Sync service returned '+r.status);
+ return await r.json();
+}
+async function ssSyncNow(){
+ if(!ssSyncKey || ssSyncBusy || document.hidden)return;
+ ssSyncBusy=true;
+ try{
+  ssSyncStatus.textContent='Synchronising…';
+  const remote=await ssRequest('GET');
+  if(remote && remote.schema===1)ssApply(remote);
+  const merged=await ssRequest('POST',ssPayload());
+  ssApply(merged);
+  ssSyncStatus.textContent='Linked with Omarchy · last sync '+hm(Date.now())+' Muscat';
+ }catch(e){
+  ssSyncStatus.textContent='Not synchronised: '+e.message+' · your phone records are safe';
+ }finally{ssSyncBusy=false;}
+}
+$('connectSync').onclick=()=>{
+ let key=$('syncCode').value.trim();
+ if(!/^[a-zA-Z0-9_-]{20,100}$/.test(key)){
+  ssSyncStatus.textContent='Enter the pairing code printed by your Omarchy installer.';
+  return;
+ }
+ ssSyncKey=key;
+ localStorage.setItem(SS_SYNC_STORAGE,key);
+ $('syncCode').value='';
+ ssSyncNow();
+};
+$('disconnectSync').onclick=()=>{
+ ssSyncKey='';
+ localStorage.removeItem(SS_SYNC_STORAGE);
+ ssSyncStatus.textContent='Disconnected. The phone keeps its existing records.';
+};
+setInterval(ssSyncNow,60000);
+window.addEventListener('focus',ssSyncNow);
+setTimeout(ssSyncNow,1500);
