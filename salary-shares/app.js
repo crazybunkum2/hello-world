@@ -178,6 +178,7 @@ function ssPayload(){
   },
   holdings:data.holdings.map(h=>({symbol:h.symbol,qty:Number(h.qty),basis:Number(h.basis)})),
   holdingsUpdatedAt:Number(data.holdingsUpdatedAt)||1,
+  cashGBP:Number(data.cashGBP)||0,cashUpdatedAt:Number(data.cashUpdatedAt)||1,
   spending:ssSpending()
  };
 }
@@ -197,6 +198,9 @@ function ssApply(remote){
     Number(remote.holdingsUpdatedAt)>=Number(data.holdingsUpdatedAt||0)){
    data.holdings=remote.holdings.filter(h=>typeof h.symbol==='string'&&Number.isFinite(h.qty)&&Number.isFinite(h.basis));
    data.holdingsUpdatedAt=Number(remote.holdingsUpdatedAt)||1;
+ }
+ if(Number(remote.cashUpdatedAt)>=Number(data.cashUpdatedAt||0) && Number.isFinite(remote.cashGBP)){
+  data.cashGBP=remote.cashGBP;data.cashUpdatedAt=Number(remote.cashUpdatedAt)||1;
  }
  if(Array.isArray(remote.spending)){
   let list=new Map();
