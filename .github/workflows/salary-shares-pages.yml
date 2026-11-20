@@ -1,0 +1,38 @@
+name: Publish Salary and Shares iPhone
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'salary-shares/**'
+      - '.github/workflows/salary-shares-pages.yml'
+  schedule:
+    - cron: '*/15 7-22 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: salary-shares-pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Refresh public market price cache
+        run: python3 salary-shares/fetch_quotes.py
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
