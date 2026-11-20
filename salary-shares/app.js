@@ -185,7 +185,7 @@ function ssApply(remote){
  if(!remote || remote.schema!==1)throw Error('Unexpected synchronisation data');
  if(remote.settings && Number.isSafeInteger(remote.settings.openingBaisa)){
   let s=remote.settings, old=Number(data.settingsUpdatedAt)||Number(data.anchor)||0;
-  if(s.updatedAt>=old){
+  if(s.updatedAt>=old || !localStorage.getItem('ss-paired-initial-import-v1')){
    data.anchor=s.anchor;
    data.baisa=s.openingBaisa;
    data.salaryBaisa=s.salaryBaisa;
@@ -229,6 +229,7 @@ async function ssSyncNow(){
   if(remote && remote.schema===1)ssApply(remote);
   const merged=await ssRequest('POST',ssPayload());
   ssApply(merged);
+  localStorage.setItem('ss-paired-initial-import-v1','1');
   ssSyncStatus.textContent='Linked with Omarchy · last sync '+hm(Date.now())+' Muscat';
  }catch(e){
   ssSyncStatus.textContent='Not synchronised: '+e.message+' · your phone records are safe';
