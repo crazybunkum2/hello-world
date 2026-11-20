@@ -24,16 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure GitHub Pages
+        id: setup
         continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
       - name: Refresh public market price cache
+        if: steps.setup.outcome == 'success'
         run: python3 salary-shares/fetch_quotes.py
       - name: Upload site
+        if: steps.setup.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
       - name: Publish
+        if: steps.setup.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
