@@ -256,3 +256,70 @@ $('disconnectSync').onclick=()=>{
 setInterval(ssSyncNow,60000);
 window.addEventListener('focus',ssSyncNow);
 setTimeout(ssSyncNow,1500);
+
+
+// NBO_SMS_BANKING_INBOX_V1
+// This inbox is read-only to the existing savings ledger; no duplicate deductions.
+const NBO_INBOX_API='https://salary-shares-iphone-paul-2026.netlify.app/.netlify/functions/nbo';
+let nboReceiver='',nboBusy=false;
+const nboStatus=$('nboStatus'),nboBalances=$('nboBankBalances'),nboEntries=$('nboEntries');
+const nboMoney=b=>Number.isFinite(b)?'OMR '+(b/1000).toFixed(3):'Not yet reported';
+function nboEntry(text,secondary){
+ const wrap=document.createElement('div');
+ wrap.className='entry';
+ const main=document.createElement('div');
+ main.textContent=text;
+ main.style.fontWeight='600';
+ const sub=document.createElement('p');
+ sub.className='small';
+ sub.textContent=secondary||'';
+ wrap.append(main,sub);
+ return wrap;
+}
+function nboRender(events,balances){
+ nboEntries.replaceChildren();
+ nboBalances.replaceChildren();
+ for(const acct of ['017','018']){
+  const b=balances&&balances[acct];
+  nboBalances.append(nboEntry('NBO account '+acct+' · '+(b?nboMoney(b.baisa):'Awaiting an SMS'),b?'Bank-reported available balance; not added to the other account':''));
+ }
+ for(const t of events.slice(0,25)){
+  const direction=t.direction==='in'?'+':'−';
+  const detail=(t.category==='card'?'Card '+String(t.account||'').replace(/^card /,''):'Account '+t.account);
+  const stamp=t.occurredAt||t.receivedAt;
+  nboEntries.append(nboEntry(direction+nboMoney(t.amountBaisa)+' · '+(t.merchant||detail),detail+' · '+(t.direction==='in'?'Money in':'Money out')+(Number.isFinite(stamp)?' · '+time(stamp):'')));
+ }
+ if(!events.length)nboEntries.append(nboEntry('No new NBO messages received yet','New bank SMS alerts will appear here once the iPhone Shortcut is enabled.'));
+}
+async function nboLoad(){
+ if(!ssSyncKey){nboStatus.textContent='First connect Sync with Omarchy below.';return}
+ if(nboBusy||document.hidden)return;
+ nboBusy=true;
+ try{
+  const h={Authorization:'Bearer '+ssSyncKey};
+  const r=await fetch(NBO_INBOX_API,{headers:h,cache:'no-store'});
+  if(!r.ok)throw Error('NBO receiver returned '+r.status);
+  const result=await r.json();
+  if(result.schema!==1||!Array.isArray(result.events))throw Error('Unexpected NBO response');
+  nboRender(result.events,result.balances||{});
+  nboStatus.textContent='NBO messages captured: '+result.count+' · last checked '+hm(Date.now())+' Muscat';
+  if(!nboReceiver){
+   const setup=await fetch(NBO_INBOX_API+'?mode=setup',{headers:h,cache:'no-store'});
+   if(setup.ok){const d=await setup.json();if(typeof d.url==='string'&&d.url.startsWith('https://')){nboReceiver=d.url;$('nboReceiverUrl').value=nboReceiver}}
+  }
+ }catch(err){nboStatus.textContent='NBO inbox not available: '+err.message}
+ finally{nboBusy=false;}
+}
+$('nboRefresh').onclick=nboLoad;
+$('nboCopyUrl').onclick=()=>{
+ if(!nboReceiver){nboStatus.textContent='Connect Sync with Omarchy, then tap Check alerts.';return}
+ navigator.clipboard.writeText(nboReceiver).then(()=>{
+  nboStatus.textContent='Private receiver link copied. Paste it into the Shortcuts Get Contents of URL action.';
+ }).catch(()=>{
+  $('nboReceiverUrl').focus();$('nboReceiverUrl').select();
+  nboStatus.textContent='Link selected. Use Copy to copy it. Keep it private.';
+ });
+};
+setTimeout(nboLoad,2200);
+setInterval(nboLoad,60000);
+window.addEventListener('focus',nboLoad);
