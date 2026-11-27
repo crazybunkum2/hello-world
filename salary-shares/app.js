@@ -293,18 +293,22 @@ function nboRender(events,balances){
 }
 async function nboLoad(){
  if(!ssSyncKey){nboStatus.textContent='First connect Sync with Omarchy below.';return}
- if(nboBusy||document.hidden)return;
+ if(nboBusy){nboStatus.textContent='Still checking NBO alerts…';return}
+ if(document.hidden){nboStatus.textContent='Reopen the app to check NBO alerts.';return}
  nboBusy=true;
+ nboStatus.textContent='Checking NBO alerts…';
+ const abort=new AbortController();
+ const watchdog=setTimeout(()=>abort.abort(),15000);
  try{
   const h={Authorization:'Bearer '+ssSyncKey};
-  const r=await fetch(NBO_INBOX_API,{headers:h,cache:'no-store'});
+  const r=await fetch(NBO_INBOX_API,{headers:h,cache:'no-store',signal:abort.signal});
   if(!r.ok)throw Error('NBO receiver returned '+r.status);
   const result=await r.json();
   if(result.schema!==1||!Array.isArray(result.events))throw Error('Unexpected NBO response');
   nboRender(result.events,result.balances||{});
   nboStatus.textContent='NBO messages captured: '+result.count+' · last checked '+hm(Date.now())+' Muscat';
   if(!nboReceiver){
-   const setup=await fetch(NBO_INBOX_API+'?mode=setup',{headers:h,cache:'no-store'});
+   const setup=await fetch(NBO_INBOX_API+'?mode=setup',{headers:h,cache:'no-store',signal:abort.signal});
    if(setup.ok){const d=await setup.json();if(typeof d.url==='string'&&d.url.startsWith('https://')){nboReceiver=d.url;$('nboReceiverUrl').value=nboReceiver}}
   }
  }catch(err){nboStatus.textContent='NBO inbox not available: '+err.message}
