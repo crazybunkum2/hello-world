@@ -18,6 +18,13 @@ function seed(){
  if(location.hash)history.replaceState(null,'',location.pathname+location.search);
 }
 seed();
+// One-time conversion of the investment display preference to Omani rials.
+// Preserve the user's ability to select any currency afterwards.
+if(!localStorage.getItem('ss-investment-omr-20261127')){
+ data.investCurrency='OMR';
+ localStorage.setItem('ss-investment-omr-20261127','1');
+ save();
+}
 const time=ms=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Muscat',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(ms));
 const hm=ms=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Muscat',hour:'2-digit',minute:'2-digit'}).format(new Date(ms));
 const dp=ms=>Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Muscat',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date(ms)).filter(p=>p.type!=='literal').map(p=>[p.type,+p.value]));
@@ -279,9 +286,14 @@ function nboEntry(text,secondary){
 function nboRender(events,balances){
  nboEntries.replaceChildren();
  nboBalances.replaceChildren();
+ const accountLabels={'017':'Main savings','018':'Everyday spending'};
  for(const acct of ['017','018']){
   const b=balances&&balances[acct];
-  nboBalances.append(nboEntry('NBO account '+acct+' · '+(b?nboMoney(b.baisa):'Awaiting an SMS'),b?'Bank-reported available balance; not added to the other account':''));
+  nboBalances.append(nboEntry(accountLabels[acct]+' · '+acct+' · '+(b?nboMoney(b.baisa):'Awaiting bank confirmation'),b?(b.source==='NBO SMS'?'Updated by NBO text':'Confirmed in NBO banking app'):''));
+ }
+ if(balances?.['017']&&balances?.['018']){
+  const sum=balances['017'].baisa+balances['018'].baisa;
+  nboBalances.append(nboEntry('Combined NBO accounts · '+nboMoney(sum),'Transfers between these accounts are not expenditure'));
  }
  for(const t of events.slice(0,25)){
   const direction=t.direction==='in'?'+':'−';
