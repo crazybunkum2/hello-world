@@ -37,6 +37,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
+      - name: Wait for artifact indexing
+        if: steps.setup.outcome == 'success'
+        run: sleep 30
       - name: Publish
         if: steps.setup.outcome == 'success'
         id: deployment
